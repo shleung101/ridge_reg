@@ -1,5 +1,6 @@
 ### Q3 
 library(MASS)
+library(tidyverse)
 source("ridge_func.R")
 
 # # Dimension 
@@ -14,9 +15,11 @@ source("ridge_func.R")
 
 
 train_test_func <- function(true_beta, var_cov, ntrain, ntest){
-  trained_reg <- training(true_beta, var_cov, ntrain)
+  # Train model 
+  trained_reg <- training(true_beta, var_cov, ntrain = ntrain)
   
-  test_reg <- testing(true_beta, var_cov, trained_reg$bhat_ols, trained_reg$bhat_ridge, ntest)
+  # Test sampling from the same dist (but different seed obv)
+  test_reg <- testing(true_beta, var_cov, bhat_ols = trained_reg$bhat_ols, bhat_ridge = trained_reg$bhat_ridge, ntest = ntest)
   
   # Return a 2xn matrix where 1st row OLS, 2nd row Ridge 
   return(c(test_reg$TE_test_ols, test_reg$TE_test_ridge))
@@ -28,23 +31,14 @@ get_test_error <- function(d){
   true_beta = matrix(1, nrow = d, ncol = 1)
   var_cov = diag(d)
   ntrain = 100
-  ntest = 100
+  ntest = 500
+  total_rounds = 1000 # should be 1000
   
-  
-  # Setting up ntest number of rounds 
-  rounds <- matrix(NA, nrow = ntest, ncol = 1) 
-  # rounds <- matrix(1:ntest, nrow = ntest, ncol = 1) 
-  
-  
-  
-  ###### ISSUE: Cannot feed in arguments correctly, sapply not detecting the arguments
-  
+ 
+  # Run train_test_func 1000x
   # Saving testing errors into a matrix 
-  testing_err <- sapply(rounds, train_test_func, 
-                        true_beta = matrix(1, nrow = d, ncol = 1), 
-                        var_cov = diag(d), 
-                        ntrain = 100, 
-                        ntest = 100)
+  testing_err <- replicate(total_rounds, train_test_func(true_beta, var_cov, ntrain = 100, ntest = 100))
+  
   
   # Summing over rows to get OLS and Ridge Risk Error 
   risk_ddim <- rowSums(testing_err)/ntest
@@ -54,74 +48,27 @@ get_test_error <- function(d){
 }
 
 
-### need to iterate over each dimension d 
+################# Implementation ################# 
 
-# Save d in dimension vector 
-# Call training
-# Save beta values 
-# Feed beta estimates in testing 
-
-
+# Define the different dimensions I want to iterate over 
 d_elements <- c(1, seq(10, 90, by = 10), 98)
-dim_vec <- matrix(d_elements)
-risk_vec <- matrix(NA, nrow = nrow(dim_vec), ncol = 1)
 
+risk_mat <- sapply(d_elements, get_test_error)
 
-sapply(d_elements, get_test_error)
+dim_risk_df <- data.frame(t(rbind(d_elements, risk_mat)))
 
-
-
-
+colnames(dim_risk_df) <- c("Dimension", "OLS_Risk", "Ridge_Risk")
 
 
 
-# Testing for d=1 
-
-
-rounds <- matrix(1:ntest, nrow = ntest, ncol = 1) 
-testing_err <- sapply(rounds, train_test_func)
-risk_ddim <- rowSums(testing_err)/ntest
-
-# Save in Risk vector 
-
-
-
-
-
-
-
-
-########## Debug 
-d=2
-true_beta = matrix(1, nrow = d, ncol = 1)
-var_cov = diag(d)
-ntrain = 100
-ntest = 100
-
-
-# Setting up ntest number of rounds 
-rounds <- matrix(NA, nrow = ntest, ncol = 1) 
-# rounds <- matrix(1:ntest, nrow = ntest, ncol = 1) 
-
-
-train_test_func(true_beta, 
-                var_cov , 
-                ntrain = 100, 
-                ntest = 100)
-
-## mvnorm has issues 
-
-
-###### ISSUE: Cannot feed in arguments correctly, sapply not detecting the arguments
-
-# Saving testing errors into a matrix 
-testing_err <- sapply(rounds, train_test_func, 
-                      true_beta = matrix(1, nrow = d, ncol = 1), 
-                      var_cov = diag(d), 
-                      ntrain = 100, 
-                      ntest = 100)
-
-
+dim_risk_df %>% pivot_longer(cols = ends_with("Risk"), 
+                             names_to = "Type", 
+                             values_to = "Test_Error") %>% 
+  ggplot(aes(x = Dimension, y = Test_Error, color = Type)) + 
+    geom_point(size = 2) + 
+    geom_line(size = 1) + 
+    labs(title = "OLS vs Ridge Risk Error", y = "Risk") + 
+    theme(plot.title = element_text(hjust = 0.5, size = 20))
 
 
 
