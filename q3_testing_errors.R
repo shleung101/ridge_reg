@@ -37,11 +37,11 @@ get_test_error <- function(d){
  
   # Run train_test_func 1000x
   # Saving testing errors into a matrix 
-  testing_err <- replicate(total_rounds, train_test_func(true_beta, var_cov, ntrain = 100, ntest = 100))
+  testing_err <- replicate(total_rounds, train_test_func(true_beta, var_cov, ntrain = ntrain, ntest = ntest))
   
   
   # Summing over rows to get OLS and Ridge Risk Error 
-  risk_ddim <- rowSums(testing_err)/ntest
+  risk_ddim <- rowSums(testing_err)/ncol(testing_err)
   
   return(risk_ddim)
 
